@@ -1,0 +1,158 @@
+---
+title: "Practical Machine Learning"
+author: "Dr. Chem. Eng. Nikolaos Fotopoulos"
+date: "Sunday, April 26, 2015"
+output: html_document
+---
+
+# MachineLearn
+### Course Project submission for John Hopkins Univ. Practical Machine Learning , Coursera course. 
+
+####Background
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. These type of devices are part of the quantified self movement – a group of enthusiasts who take measurements about themselves regularly to improve their health, to find patterns in their behavior, or because they are tech geeks. One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it.  
+
+### Data 
+
+The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+### Citation
+Velloso, E.; Bulling, A.; Gellersen, H.; Ugulino, W.; Fuks, H. Qualitative Activity Recognition of Weight Lifting Exercises. Proceedings of 4th International Conference in Cooperation with SIGCHI (Augmented Human '13) . Stuttgart, Germany: ACM SIGCHI, 2013.
+
+### Goal 
+The goal of the project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. We use any of the other variables to predict with and we should create a report describing how we built our model, how we used _cross validation_, what we think _the expected out of sample error_ is, and why we made the choices we did. We will also use our prediction model to _predict_ 20 different test cases. 
+
+_make sure time is in correct format_
+```{r}
+Sys.setlocale("LC_TIME", "English")
+```
+
+#### Data Loading
+```{r}
+trainURL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+testURL<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+```
+
+_however the download is not working easily in all places, so we load from a local file_
+_Also from preemptive examination of the raw data we know that NA in data is coded as NA or #DIV/0! or just blank. So, we will rectify the NAs by using the na.strings option in read.csv function_   
+
+```{r}
+training <- read.csv(file="C:/data/pml-training.csv", header=TRUE,sep=',',na.strings=c("NA","#DIV/0!",""))
+testing <- read.csv(file="C:/data/pml-testing.csv", header=TRUE,sep =',',na.strings=c("NA","#DIV/0!",""))
+```
+
+#### Examine the Data
+
+_dimensions..._
+```{r}
+dim(training)
+```
+
+_We scrutinize structure. We check fot NA tokens, sparce, near zero variance and dummy variables (too big we ommit displaying it due to 2000 words limit)_
+``` {r,results='hide'}
+str(training)
+sapply(training,class)
+summary(training)
+```
+
+_we observe there are a lot of dummy variables zero variance variables and different tokens for NA's, so we need to discard them and concentrate on numerical variables_
+
+
+#### Data cleaning
+
+_first we take out of our dataframes the dummy variables. We will not take into account variables that contain over 95% NA's. However, we have a choice since we can either to retain the non-dummy variables from the train set or from the test set. Train, has a greater pool of non dummy variables so, we will retain in test set every non-redundant variable we use in train set_
+```{r, echo=TRUE}
+NA_ratio_train<-apply(training,2,function(x) {sum(is.na(x))/dim(training)[1]})
+```
+
+_We use this ratio to reject any column that is filled with more than 30% NA'S_
+
+```{r}
+training<-training[,which(NA_ratio_train < 0.30)]
+testing<-testing[,which(NA_ratio_train < 0.30)]
+```
+
+_we verify that we have the same number of variables selected_
+```{r}
+dim(training)[2]
+dim(testing)[2]
+```
+
+_we eliminate some remaining irrrelevant columns by hand_
+
+```{r}
+training<-training[,-(2:7)]
+testing<-testing[,-(2:7)]
+```
+
+_Inspect the remaining variables (results = 'hide') to save space..._ 
+```{r, results='hide'}
+summary(training)
+```
+
+
+#### Data Preprocessing
+
+_we convert the response variable Classe to factor, then we filter and normalize all numeric variables. Our final dataset will contain only numerical variables and the factor response var Classe_
+
+```{r}
+#training$classe <- as.factor(training$classe)
+#testing$classe <- as.factor(testing$classe)
+numvars <- which(lapply(training, class) %in% "numeric")
+numvars
+```
+
+#### Cross Validation
+_preparing the cross validation, removing correlated variables and zero variance variables_
+
+```{r}
+library(caret)
+varstoremove <- findCorrelation(cor(training[,numvars]), cutoff=0.7)
+training<-training[,-varstoremove]
+testing<-testing[,-varstoremove]
+```
+
+
+#### Model building
+_dividing the trainset in train and test part_
+
+```{r}
+set.seed(263)
+inTrain = createDataPartition(training$classe, p = 0.75, list=FALSE)
+trainme = training[inTrain,]
+testme = training[-inTrain,]
+```
+
+_since its a classification problem we opt for random forests 10-fold  cross	validation in	3 repetitions_
+
+```{r}
+tctrl<- trainControl(method="repeatedcv", number=10,  repeats=3)
+model <- train(classe ~., method="rf", data=trainme, trControl=tctrl, number=5, ntree=501)
+model
+plot(model)
+```
+
+_re;ative importance of predictors_
+
+```{r}
+importance =	varImp(model,	scale=FALSE)
+importance
+plot(importance)
+```
+
+_performance of the model_
+
+```{r}
+predictions <- predict(model, testme)
+confusionMatrix(testme$classe, predictions)
+table(predictions,testme$classe)
+```
+
+_we apply the model to the original testing data set_
+
+```{r}
+results <- predict(model, testing)
+results
+```
+
+
+_may the R be with you..._
