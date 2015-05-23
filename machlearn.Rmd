@@ -80,8 +80,8 @@ dim(testing)[2]
 _we eliminate some remaining irrrelevant columns by hand_
 
 ```{r}
-training<-training[,-(2:7)]
-testing<-testing[,-(2:7)]
+training<-training[,-(1:7)]
+testing<-testing[,-(1:7)]
 ```
 
 _Inspect the remaining variables (results = 'hide') to save space..._ 
